@@ -1,4 +1,3 @@
-# scraper.py
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -10,7 +9,6 @@ import os
 
 os.makedirs("output", exist_ok=True)
 
-# Load your products
 df = pd.read_csv("data/my_products.csv")
 
 options = webdriver.ChromeOptions()
@@ -21,9 +19,10 @@ results = []
 for _, row in df.iterrows():
     try:
         driver.get(f"https://www.amazon.com/dp/{row['asin']}")
-        time.sleep(4)
-        price = float(driver.find_element(By.CSS_SELECTOR, "span.a-price-whole").text + 
-                     driver.find_element(By.CSS_SELECTOR, "span.a-price-fraction").text)
+        time.sleep(5)
+        whole = driver.find_element(By.CSS_SELECTOR, "span.a-price-whole").text
+        frac = driver.find_element(By.CSS_SELECTOR, "span.a-price-fraction").text
+        price = float(whole + frac)
         diff = (price - row['current_price_usd']) / row['current_price_usd'] * 100
     except:
         price, diff = None, None
@@ -35,6 +34,5 @@ for _, row in df.iterrows():
     time.sleep(3)
 driver.quit()
 
-# Save
 pd.DataFrame(results).to_csv("output/latest_prices.csv", index=False)
-print("Scraping done. File ready for upload.")
+print("DONE")
