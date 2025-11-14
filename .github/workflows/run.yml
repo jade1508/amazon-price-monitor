@@ -21,4 +21,4 @@ jobs:
         run: |
           curl -n -X PUT -H "Authorization: Bearer $DB_TOKEN" \
             -T output/latest_prices.csv \
-            "$DB_HOST/api/2.0/dbfs/put?path=dbfs:/FileStore/price_monitor/latest_prices.csv&overwrite=true"
+            "$DB_HOST/api/2.0/dbfs/put?path=dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv&overwrite=true"
