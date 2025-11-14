@@ -10,15 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with: { python-version: '3.11' }
-      - run: pip install -r requirements.txt
-      - run: python scraper.py
-      - name: Upload to Databricks
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Run scraper
+        run: python scraper.py
+
+      - name: Upload to Databricks Volume
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          curl -n -X PUT -H "Authorization: Bearer $DB_TOKEN" \
-            -T output/latest_prices.csv \
-            "$DB_HOST/api/2.0/dbfs/put?path=dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv&overwrite=true"
+          CONTENTS=$(base64 -w 0 output/latest_prices.csv)
+          curl -X POST "$DB_HOST/api/2.0/dbfs/put" \
+            -H "Authorization: Bearer $DB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "path": "dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
+              "overwrite": true,
+              "contents": "'$CONTENTS'"
+            }'
