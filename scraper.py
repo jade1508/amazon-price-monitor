@@ -5,12 +5,13 @@ import time
 from datetime import datetime
 import os
 
+# Create output folder
 os.makedirs("output", exist_ok=True)
 
 # Load products
-print("Loading my_products.csv...")
+print("Loading data/my_products.csv...")
 try:
-    df = pd.read_csv("my_products.csv")
+    df = pd.read_csv("data/my_products.csv")
     print(f"Loaded {len(df)} products")
 except Exception as e:
     print(f"CSV load failed: {e}")
@@ -19,9 +20,10 @@ except Exception as e:
 results = []
 
 with sync_playwright() as p:
+    # Launch with more options
     browser = p.chromium.launch(headless=True)
     context = browser.new_context(
-        user_agent="Mozilla/5.0 (compatible; GitHub-Actions)"
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     )
     page = context.new_page()
 
@@ -31,36 +33,45 @@ with sync_playwright() as p:
         print(f"[{idx+1}/{len(df)}] Scraping {asin}...")
 
         try:
-            response = page.goto(url, timeout=30000)
-            if response.status != 200:
-                print(f"HTTP {response.status} - Page failed")
-                raise Exception("Page not loaded")
+            # Longer timeout + wait for network
+            response = page.goto(url, timeout=60000)
+            if response and response.status != 200:
+                print(f"HTTP {response.status}")
+                raise Exception("Bad response")
 
-            page.wait_for_load_state('networkidle', timeout=15000)
+            # Wait longer for price to load
+            page.wait_for_timeout(8000)
+            page.wait_for_load_state('networkidle', timeout=30000)
 
-            # Try multiple price selectors (Amazon changes them)
+            # Try multiple price selectors
             price = None
-            for selector in [
+            selectors = [
                 "span.a-price-whole",
-                "span.a-price span.a-offscreen",
-                "span.a-price.a-text-price.a-size-medium.apexPriceToPay span.a-offscreen"
-            ]:
+                "span.a-offscreen",
+                "div.a-price span.a-offscreen"
+            ]
+            for sel in selectors:
                 try:
-                    price_text = page.locator(selector).first.inner_text(timeout=5000).strip()
+                    price_text = page.locator(sel).first.inner_text(timeout=5000).strip()
                     if price_text and '$' in price_text:
                         price = float(price_text.replace('$', '').replace(',', '').split()[0])
                         break
                 except:
                     continue
 
-            if price is None:
-                print("Price not found - trying fallback")
-                # Fallback: search for any $XX.XX
+            if not price:
+                # Fallback: search page content
                 content = page.content()
                 import re
                 match = re.search(r'\$([\d,]+\.?\d*)', content)
                 if match:
                     price = float(match.group(1).replace(',', ''))
+
+            # Extract other fields safely
+            child_name = row.get('child_name', '')
+            listing = row.get('listing', '')
+            size_code = row.get('size_code', '')
+            brand = row.get('brand', '')
 
             if price:
                 diff_pct = ((price - row['current_price_usd']) / row['current_price_usd']) * 100
@@ -71,8 +82,12 @@ with sync_playwright() as p:
 
             results.append({
                 'asin': asin,
+                'child_name': child_name,
+                'listing': listing,
+                'size_code': size_code,
+                'brand': brand,
                 'my_price': float(row['current_price_usd']),
-                'amazon_price': float(price) if price else None,
+                'amazon_price': price,
                 'diff_pct': round(diff_pct, 2) if diff_pct else None,
                 'timestamp': datetime.now().isoformat()
             })
@@ -81,16 +96,16 @@ with sync_playwright() as p:
             print(f"FAILED {asin}: {e}")
             results.append({
                 'asin': asin,
-                'child_name': child_name,
-                'listing': listing,
-                'size_code': size_code,
-                'brand': brand,
-                'my_price': row['current_price_usd'],
-                'amazon_price': amazon_price,
-                'diff_pct': round(diff_pct, 2),
+                'child_name': row.get('child_name', ''),
+                'listing': row.get('listing', ''),
+                'size_code': row.get('size_code', ''),
+                'brand': row.get('brand', ''),
+                'my_price': float(row['current_price_usd']),
+                'amazon_price': None,
+                'diff_pct': None,
                 'timestamp': datetime.now().isoformat()
             })
-        time.sleep(5)  # Be respectful
+        time.sleep(8)  # Be respectful
 
     browser.close()
 
