@@ -71,8 +71,8 @@ with sync_playwright() as p:
 
             results.append({
                 'asin': asin,
-                'my_price': row['current_price_usd'],
-                'amazon_price': price,
+                'my_price': float(row['current_price_usd']),
+                'amazon_price': float(price) if price else None,
                 'diff_pct': round(diff_pct, 2) if diff_pct else None,
                 'timestamp': datetime.now().isoformat()
             })
