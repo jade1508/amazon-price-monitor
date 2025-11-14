@@ -10,7 +10,7 @@ os.makedirs("output", exist_ok=True)
 # Load products
 print("Loading my_products.csv...")
 try:
-    df = pd.read_csv("data/my_products.csv")
+    df = pd.read_csv("my_products.csv")
     print(f"Loaded {len(df)} products")
 except Exception as e:
     print(f"CSV load failed: {e}")
