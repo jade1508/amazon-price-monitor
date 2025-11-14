@@ -1,0 +1,24 @@
+name: Daily Price Check
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - run: python scraper.py
+      - name: Upload to Databricks
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_TOKEN: ${{ secrets.DB_TOKEN }}
+        run: |
+          curl -n -X PUT -H "Authorization: Bearer $DB_TOKEN" \
+            -T output/latest_prices.csv \
+            "$DB_HOST/api/2.0/dbfs/put?path=dbfs:/FileStore/price_monitor/latest_prices.csv&overwrite=true"
