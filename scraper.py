@@ -27,7 +27,12 @@ for _, row in df.iterrows():
     except:
         price, diff = None, None
     results.append({
-        'asin': row['asin'], 'my_price': row['current_price_usd'],
+        'asin': row['asin'], 
+        'child_name': row['child_name'], 
+        'listing': row['listing'], 
+        'size_code': row['size_code'], 
+        'brand': row['brand'], 
+        'my_price': row['current_price_usd'],
         'amazon_price': price, 'diff_pct': round(diff, 2) if diff else None,
         'timestamp': datetime.now().isoformat()
     })
