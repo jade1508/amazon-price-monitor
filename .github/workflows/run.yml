@@ -2,8 +2,8 @@ name: Daily Price Check
 
 on:
   schedule:
-    - cron: '0 7 * * *'
-  workflow_dispatch:
+    - cron: '0 7 * * *'  # 7 AM UTC daily
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   scrape:
@@ -16,17 +16,69 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Chromium dependencies (Fix for Ubuntu 22.04)
         run: |
-          pip install -r requirements.txt
           sudo apt-get update
-          sudo apt-get install -y libasound2t64 libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libxshmfence1 libgtk-3-0 libpangocairo-1.0-0
-          playwright install chromium --with-deps
+          sudo apt-get install -y \
+            ca-certificates \
+            fonts-liberation \
+            libasound2t64 \
+            libatk-bridge2.0-0 \
+            libatk1.0-0 \
+            libatspi2.0-0 \
+            libdrm2 \
+            libgtk-3-0 \
+            libnspr4 \
+            libnss3 \
+            libx11-xcb1 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libxkbcommon0 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libasound2-data \
+            libpangocairo-1.0-0 \
+            libgdk-pixbuf-2.0-0 \
+            libxss1 \
+            libxcursor1 \
+            libxinerama1 \
+            libxi6 \
+            libxtst6 \
+            libatspi2.0-0 \
+            libgtk-3-0 \
+            xvfb  # For headless display
+          echo "Chromium deps installed successfully"
+
+      - name: Install Playwright and browsers (no deps flag)
+        run: |
+          playwright install chromium
+          echo "Playwright Chromium installed"
 
       - name: Run scraper
-        run: python scraper.py
+        run: |
+          python scraper.py || echo "Scraper failed - check logs"
+        env:
+          # Add if needed for headless
+          DISPLAY: :99
 
-      - name: Upload to Databricks
+      - name: Check if CSV generated
+        run: |
+          if [ -f "output/latest_prices.csv" ]; then
+            echo "✅ CSV generated: $(wc -l < output/latest_prices.csv) lines"
+          else
+            echo "❌ No CSV - scraper failed"
+            exit 1
+          fi
+
+      - name: Upload to Databricks Volume
+        if: success()  # Only if CSV exists
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_TOKEN: ${{ secrets.DB_TOKEN }}
@@ -40,3 +92,4 @@ jobs:
               "overwrite": true,
               "contents": "'$CONTENTS'"
             }'
+          echo "✅ Uploaded to Databricks"
