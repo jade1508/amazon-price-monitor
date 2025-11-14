@@ -19,12 +19,14 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          sudo apt-get update
+          sudo apt-get install -y libasound2t64 libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libxshmfence1 libgtk-3-0 libpangocairo-1.0-0
           playwright install chromium --with-deps
 
       - name: Run scraper
         run: python scraper.py
 
-      - name: Upload to Databricks Volume
+      - name: Upload to Databricks
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_TOKEN: ${{ secrets.DB_TOKEN }}
