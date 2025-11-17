@@ -53,10 +53,10 @@ jobs:
             libxtst6 \
             libatspi2.0-0 \
             libgtk-3-0 \
-            xvfb  # For headless display
+            xvfb
           echo "Chromium deps installed successfully"
 
-      - name: Install Playwright and browsers (no deps flag)
+      - name: Install Playwright and browsers
         run: |
           playwright install chromium
           echo "Playwright Chromium installed"
@@ -65,7 +65,6 @@ jobs:
         run: |
           python scraper.py || echo "Scraper failed - check logs"
         env:
-          # Add if needed for headless
           DISPLAY: :99
 
       - name: Check if CSV generated
@@ -77,22 +76,30 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Databricks Volume using CLI
+      - name: Upload to Databricks Volume (Fixed API)
         if: success()
         env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          # Install Databricks CLI
-          curl -fsSL https://raw.githubusercontent.com/databricks/databricks-cli/master/install.sh | sh
-          pip install databricks-cli
-          
-          # Configure CLI with token
-          databricks configure --token <<EOF
-          ${DATABRICKS_HOST}
-          ${DATABRICKS_TOKEN}
-          EOF
-          
-          # Upload file to volume
-          databricks fs cp output/latest_prices.csv dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv --overwrite
-          echo "✅ Uploaded to Databricks Volume using CLI"
+          echo "Starting upload..."
+          CONTENTS=$(base64 -w 0 output/latest_prices.csv)
+          RESPONSE=$(curl -s -w "HTTP:%{http_code}" -X POST \
+            "$DB_HOST/api/2.0/fs/files" \
+            -H "Authorization: Bearer $DB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
+              "overwrite": true,
+              "contents": "'$CONTENTS'"
+            }')
+          HTTP_CODE=$(echo $RESPONSE | cut -d' ' -f2)
+          BODY=$(echo $RESPONSE | cut -d' ' -f1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ SUCCESS: File uploaded (HTTP 200)"
+            echo $BODY
+          else
+            echo "❌ FAILED: HTTP $HTTP_CODE"
+            echo "Response body: $BODY"
+            exit 1
+          fi
