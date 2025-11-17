@@ -83,12 +83,31 @@ jobs:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
+          echo "Starting upload..."
           CONTENTS=$(base64 -w 0 output/latest_prices.csv)
-          curl -n -X POST "$DB_HOST/api/2.0/fs/files" \
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "$DB_HOST/api/2.0/fs/files" \
             -H "Authorization: Bearer $DB_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{
               "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
               "overwrite": true,
               "contents": "'$CONTENTS'"
-            }' && echo "Uploaded to Databricks Volume" || echo "Upload FAILED"
+            }')
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "SUCCESS: File uploaded (HTTP 200)"
+          else
+            echo "FAILED: Upload returned HTTP $HTTP_CODE"
+            echo "Response:"
+            curl -s -X POST "$DB_HOST/api/2.0/fs/files" \
+              -H "Authorization: Bearer $DB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
+                "overwrite": true,
+                "contents": "'$CONTENTS'"
+              }'
+            exit 1
+          fi
