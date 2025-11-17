@@ -77,37 +77,22 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Databricks Volume
+      - name: Upload to Databricks Volume using CLI
         if: success()
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_TOKEN: ${{ secrets.DB_TOKEN }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
-          echo "Starting upload..."
-          CONTENTS=$(base64 -w 0 output/latest_prices.csv)
+          # Install Databricks CLI
+          curl -fsSL https://raw.githubusercontent.com/databricks/databricks-cli/master/install.sh | sh
+          pip install databricks-cli
           
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "$DB_HOST/api/2.0/fs/files" \
-            -H "Authorization: Bearer $DB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
-              "overwrite": true,
-              "contents": "'$CONTENTS'"
-            }')
+          # Configure CLI with token
+          databricks configure --token <<EOF
+          ${DATABRICKS_HOST}
+          ${DATABRICKS_TOKEN}
+          EOF
           
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "SUCCESS: File uploaded (HTTP 200)"
-          else
-            echo "FAILED: Upload returned HTTP $HTTP_CODE"
-            echo "Response:"
-            curl -s -X POST "$DB_HOST/api/2.0/fs/files" \
-              -H "Authorization: Bearer $DB_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
-                "overwrite": true,
-                "contents": "'$CONTENTS'"
-              }'
-            exit 1
-          fi
+          # Upload file to volume
+          databricks fs cp output/latest_prices.csv dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv --overwrite
+          echo "✅ Uploaded to Databricks Volume using CLI"
