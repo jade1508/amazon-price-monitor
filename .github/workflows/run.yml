@@ -84,12 +84,11 @@ jobs:
           DB_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
           CONTENTS=$(base64 -w 0 output/latest_prices.csv)
-          curl -X POST "$DB_HOST/api/2.0/fs/files" \
+          curl -n -X POST "$DB_HOST/api/2.0/fs/files" \
             -H "Authorization: Bearer $DB_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{
               "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
               "overwrite": true,
               "contents": "'$CONTENTS'"
-            }'
-          echo "Uploaded to Databricks Volume"
+            }' && echo "Uploaded to Databricks Volume" || echo "Upload FAILED"
