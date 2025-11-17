@@ -76,24 +76,15 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Databricks Volume (WORKS 2025)
-        if: success()
+      - name: Upload to Databricks Volume using Official CLI Action
+        uses: databricks/setup-cli@main
+        with:
+          token: ${{ secrets.DB_TOKEN }}
         env:
           DATABRICKS_HOST: ${{ secrets.DB_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          echo "Installing Databricks CLI..."
-          pip install --quiet databricks-cli
-
-          echo "Configuring CLI..."
-          databricks configure --token <<EOF
-          $DATABRICKS_HOST
-          $DATABRICKS_TOKEN
-          EOF
-
-          echo "Uploading latest_prices.csv..."
+          echo "Uploading latest_prices.csv to volume..."
           databricks fs cp --overwrite \
             output/latest_prices.csv \
             dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv
-
-          echo "SUCCESS: File uploaded to Databricks volume"
+          echo "✅ SUCCESS: File uploaded to Databricks volume"
