@@ -76,15 +76,30 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Databricks Volume using Official CLI Action
-        uses: databricks/setup-cli@main
-        with:
-          token: ${{ secrets.DB_TOKEN }}
+      - name: Upload to Databricks Volume (Fixed API)
+        if: success()
         env:
-          DATABRICKS_HOST: ${{ secrets.DB_HOST }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          echo "Uploading latest_prices.csv to volume..."
-          databricks fs cp --overwrite \
-            output/latest_prices.csv \
-            dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv
-          echo "✅ SUCCESS: File uploaded to Databricks volume"
+          echo "Starting upload..."
+          CONTENTS=$(base64 -w 0 output/latest_prices.csv)
+          RESPONSE=$(curl -s -w "HTTP:%{http_code}" -X POST \
+            "$DB_HOST/api/2.0/fs/files" \
+            -H "Authorization: Bearer $DB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
+              "overwrite": true,
+              "contents": "'$CONTENTS'"
+            }')
+          HTTP_CODE=$(echo $RESPONSE | cut -d' ' -f2)
+          BODY=$(echo $RESPONSE | cut -d' ' -f1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ SUCCESS: File uploaded (HTTP 200)"
+            echo $BODY
+          else
+            echo "❌ FAILED: HTTP $HTTP_CODE"
+            echo "Response body: $BODY"
+            exit 1
+          fi
