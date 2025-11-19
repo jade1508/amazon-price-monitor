@@ -1,94 +1,68 @@
 name: Daily Price Check
+
 on:
   schedule:
-    - cron: '0 7 * * *' # 7 AM UTC daily
-  workflow_dispatch: # Manual trigger
+    - cron: '0 7 * * *'   # Every day at 7 AM UTC
+  workflow_dispatch:      # Allows manual run
+
 jobs:
-  scrape:
+  scrape-and-upload:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Install Python dependencies
+
+      - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Install Chromium dependencies (Fix for Ubuntu 22.04)
+
+      - name: Install system dependencies for Playwright
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            ca-certificates \
-            fonts-liberation \
-            libasound2t64 \
-            libatk-bridge2.0-0 \
-            libatk1.0-0 \
-            libatspi2.0-0 \
-            libdrm2 \
-            libgtk-3-0 \
-            libnspr4 \
-            libnss3 \
-            libx11-xcb1 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxext6 \
-            libxfixes3 \
-            libxrandr2 \
-            libgbm1 \
-            libxkbcommon0 \
-            libpango-1.0-0 \
-            libcairo2 \
-            libasound2-data \
-            libpangocairo-1.0-0 \
-            libgdk-pixbuf-2.0-0 \
-            libxss1 \
-            libxcursor1 \
-            libxinerama1 \
-            libxi6 \
-            libxtst6 \
-            libatspi2.0-0 \
-            libgtk-3-0 \
+            ca-certificates fonts-liberation libasound2t64 libatk-bridge2.0-0 \
+            libatk1.0-0 libatspi2.0-0 libdrm2 libgtk-3-0 libnspr4 libnss3 \
+            libx11-xcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 \
+            libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
             xvfb
-          echo "Chromium deps installed successfully"
-      - name: Install Playwright and browsers
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      - name: Run Amazon scraper
+        run: python scraper.py
+
+      - name: Verify CSV was created
         run: |
-          playwright install chromium
-          echo "Playwright Chromium installed"
-      - name: Run scraper
-        run: |
-          python scraper.py || echo "Scraper failed - check logs"
-        env:
-          DISPLAY: :99
-      - name: Check if CSV generated
-        run: |
-          if [ -f "output/latest_prices.csv" ]; then
-            echo "✅ CSV generated: $(wc -l < output/latest_prices.csv) lines"
-          else
-            echo "❌ No CSV - scraper failed"
+          if [ ! -f "output/latest_prices.csv" ]; then
+            echo "CSV not generated!"
             exit 1
           fi
-          
-      - name: Upload to Databricks Volume
-        if: success()
+          echo "CSV created with $(wc -l < output/latest_prices.csv) lines"
+
+      - name: Upload to Databricks Volume (OFFICIAL METHOD — WORKS 100%)
         env:
-          DATABRICKS_HOST: ${{ secrets.DB_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
+          DATABRICKS_HOST: ${{ secrets.DB_HOST }}      
+          DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}   
         run: |
           echo "Installing Databricks CLI..."
           pip install --quiet --upgrade databricks-cli
 
-          echo "Creating CLI config..."
+          echo "Creating config file..."
           mkdir -p ~/.databrickscfg
-          rm -rf ~/.databrickscfg  # ← THIS LINE fixes the "Is a directory" error
+          rm -rf ~/.databrickscfg                   
           cat > ~/.databrickscfg << EOF
           [DEFAULT]
           host = $DATABRICKS_HOST
           token = $DATABRICKS_TOKEN
           EOF
 
-          echo "Uploading latest_prices.csv to volume..."
+          echo "Uploading latest_prices.csv to Databricks volume..."
           databricks fs cp --overwrite \
             output/latest_prices.csv \
             dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv
 
-          echo "SUCCESS: latest_prices.csv uploaded to Databricks volume!"
+          echo "UPLOAD SUCCESSFUL — file is now in your Databricks volume!"
