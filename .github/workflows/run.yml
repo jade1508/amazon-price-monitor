@@ -68,26 +68,27 @@ jobs:
             exit 1
           fi
           
-      - name: Upload to Databricks Volume (Guaranteed Working)
+      - name: Upload to Databricks Volume
         if: success()
         env:
           DATABRICKS_HOST: ${{ secrets.DB_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          echo "Installing latest Databricks CLI..."
+          echo "Installing Databricks CLI..."
           pip install --quiet --upgrade databricks-cli
 
-          echo "Creating CLI config silently..."
+          echo "Creating CLI config..."
           mkdir -p ~/.databrickscfg
+          rm -rf ~/.databrickscfg  # ← THIS LINE fixes the "Is a directory" error
           cat > ~/.databrickscfg << EOF
           [DEFAULT]
           host = $DATABRICKS_HOST
           token = $DATABRICKS_TOKEN
           EOF
 
-          echo "Uploading latest_prices.csv..."
+          echo "Uploading latest_prices.csv to volume..."
           databricks fs cp --overwrite \
             output/latest_prices.csv \
             dbfs:/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv
 
-          echo "SUCCESS: latest_prices.csv uploaded to Databricks volume"
+          echo "SUCCESS: latest_prices.csv uploaded to Databricks volume!"
