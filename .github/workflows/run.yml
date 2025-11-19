@@ -76,30 +76,27 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Databricks Volume (Fixed API)
+      - name: Upload to Databricks Volume
         if: success()
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_HOST: ${{ secrets.DB_HOST }}      
           DB_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          echo "Starting upload..."
+          echo "Uploading latest_prices.csv to Unity Catalog volume..."
           CONTENTS=$(base64 -w 0 output/latest_prices.csv)
-          RESPONSE=$(curl -s -w "HTTP:%{http_code}" -X POST \
-            "$DB_HOST/api/2.0/fs/files" \
-            -H "Authorization: Bearer $DB_TOKEN" \
+          
+          RESPONSE=$(curl -s -X POST \
+            "${DB_HOST}/api/2.0/fs/files" \
+            -H "Authorization: Bearer ${DB_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{
               "path": "/Volumes/jade_catalog/price_schema/price_volume/latest_prices.csv",
               "overwrite": true,
-              "contents": "'$CONTENTS'"
+              "contents": "'"$CONTENTS"'"
             }')
-          HTTP_CODE=$(echo $RESPONSE | cut -d' ' -f2)
-          BODY=$(echo $RESPONSE | cut -d' ' -f1)
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ SUCCESS: File uploaded (HTTP 200)"
-            echo $BODY
-          else
-            echo "❌ FAILED: HTTP $HTTP_CODE"
-            echo "Response body: $BODY"
+          
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | grep -q '"error_code"' && echo "Upload FAILED" && exit 1
+          echo "SUCCESS: latest_prices.csv uploaded to Databricks volume"
             exit 1
           fi
